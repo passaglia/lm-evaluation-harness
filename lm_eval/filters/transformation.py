@@ -22,6 +22,16 @@ class UppercaseFilter(Filter):
 
         return [filter_set(resp) for resp in resps]
 
+class EvalNumber(Filter):
+    def __init__(self) -> None:
+        pass
+
+    def apply(self, resps, docs):
+        def filter_set(inst):
+            return [eval(resp.replace('万', '*10000').replace('億', '*10000*10000')) for resp in inst]
+
+        return [filter_set(resp) for resp in resps]
+
 
 class MapFilter(Filter):
     def __init__(self, mapping_dict: dict = {}, default_value=None) -> None:
