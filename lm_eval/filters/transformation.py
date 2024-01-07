@@ -28,10 +28,15 @@ class EvalNumber(Filter):
 
     def apply(self, resps, docs):
         def filter_set(inst):
-            return [str(eval(resp.replace('千', '*1000').replace('万', '*10000').replace('億', '*10000*10000'))) for resp in inst]
-
+            filtered = []
+            for resp in inst:
+                try:
+                    filtered.append(str(eval(resp.replace('千', '*1000').replace('万', '*10000').replace('億', '*10000*10000'))))
+                except:
+                    filtered.append('[invalid]')
+            return filtered
+        
         return [filter_set(resp) for resp in resps]
-
 
 class MapFilter(Filter):
     def __init__(self, mapping_dict: dict = {}, default_value=None) -> None:
