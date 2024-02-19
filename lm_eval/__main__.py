@@ -175,6 +175,12 @@ def parse_eval_args() -> argparse.Namespace:
         help="Use with --log_samples. Only model outputs will be saved and metrics will not be evaluated.",
     )
     parser.add_argument(
+        "--log_samples_filename",
+        type=str,
+        default=None
+        help="Filename to save the log_samples output to."
+    )
+    parser.add_argument(
         "--seed",
         type=partial(_int_or_none_list_arg_type, 3),
         default="0,1234,1234",  # for backward compatibility
@@ -187,6 +193,7 @@ def parse_eval_args() -> argparse.Namespace:
             "E.g, `--seed 42` sets all three seeds to 42."
         ),
     )
+
     return parser.parse_args()
 
 
@@ -314,9 +321,12 @@ def cli_evaluate(args: Union[argparse.Namespace, None] = None) -> None:
 
             if args.log_samples:
                 for task_name, config in results["configs"].items():
-                    output_name = "{}_{}".format(
-                        re.sub("/|=", "__", args.model_args), task_name
-                    )
+                    if args.log_samples_filename:
+                        output_name = args.log_samples_filename
+                    else:
+                        output_name = "{}_{}".format(
+                            re.sub("/|=", "__", args.model_args), task_name
+                        )
                     filename = path.joinpath(f"{output_name}.jsonl")
                     samples_dumped = json.dumps(
                         samples[task_name],
