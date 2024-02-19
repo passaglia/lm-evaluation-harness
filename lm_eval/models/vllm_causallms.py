@@ -211,12 +211,6 @@ class VLLM(LM):
         stop: Optional[List[str]] = None,
         **kwargs,
     ):
-        #SCP 2/19 like DF Branch
-        if self.use_chat_template:
-            print(f"First element before prompt formatting...\n{requests[0].args}")
-            requests = self.wrap_chat_template(requests)
-            print(f"First element after prompt formatting...\n{requests[0].args}")
-
 
         if generate:
             kwargs = self.modify_gen_kwargs(kwargs)
@@ -319,7 +313,7 @@ class VLLM(LM):
             print(f"First element before prompt formatting...\n{requests[0].args}")
             requests = self.wrap_chat_template(requests)
             print(f"First element after prompt formatting...\n{requests[0].args}")
-            
+
         res = []
 
         # batch tokenize contexts
