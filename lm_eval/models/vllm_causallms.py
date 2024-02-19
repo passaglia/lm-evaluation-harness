@@ -65,6 +65,7 @@ class VLLM(LM):
         use_chat_template: Optional[bool] = False,
         # TODO: validate a template exists in tokenizer config, if this flag is true
         system_prompt: Optional[str] = None,
+        continuation_whitespace: Optional[bool] = False,
     ):
         super().__init__()
 
@@ -126,6 +127,7 @@ class VLLM(LM):
         # SCP 2/19 like DF Branch
         self.system_prompt = system_prompt
         self.use_chat_template = use_chat_template
+        self.continuation_whitespace = continuation_whitespace
 
     @property
     def eot_token_id(self):
@@ -199,6 +201,8 @@ class VLLM(LM):
                 tokenize=False,
                 add_generation_prompt=True,
             )
+            if self.continuation_whitespace:
+                continuation = " " + continuation
             req.args = (context, continuation)
             new_reqs.append(req)
         return new_reqs
