@@ -85,6 +85,8 @@ class TaskConfig(dict):
     filter_list: Union[str, list] = None
     should_decontaminate: bool = False
     doc_to_decontamination_query: str = None
+    use_chat_template: bool = False
+    system_prompt: str = None
     metadata: dict = None  # by default, not used in the code. allows for users to pass arbitrary info to tasks
 
     def __post_init__(self) -> None:
