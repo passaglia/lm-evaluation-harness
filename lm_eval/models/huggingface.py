@@ -102,6 +102,11 @@ class HFLM(LM):
         # PEFT and quantization options
         peft: Optional[str] = None,
         autogptq: Optional[Union[bool, str]] = False,
+        # 2/19 SCP from Daniel Furman Branch
+        # Chat templating settings
+        use_chat_template: Optional[bool] = False,
+        # TODO: validate a template exists in tokenizer config, if this flag is true
+        system_prompt: Optional[str] = None,
         **kwargs,
     ) -> None:
         super().__init__()
@@ -258,6 +263,10 @@ class HFLM(LM):
                 assert self.tokenizer.pad_token_id == 0
             else:
                 self.tokenizer.add_special_tokens({"pad_token": "<|pad|>"})
+
+        # SCP 2/19 from DF Branch
+        self.system_prompt = system_prompt
+        self.use_chat_template = use_chat_template
 
         self._max_length = max_length
 
@@ -701,6 +710,37 @@ class HFLM(LM):
         elif self.AUTO_MODEL_CLASS == transformers.AutoModelForSeq2SeqLM:
             return self.tokenizer.decode(tokens, skip_special_tokens=True)
 
+    # SCP: 2/19 from DF Branch
+    def wrap_chat_template(
+        self, requests: List[Instance], generate=False
+    ) -> List[Instance]:
+        """
+        Utility for adding chat templates via the apply_chat_template() method
+        """
+        # TODO: handle repeats > 1 case?
+        # TODO: raise an error if system prompt not compatible with template
+        new_reqs = []
+        for req in requests:
+            context, continuation = req.args[0].strip(), req.args[1]
+            chat = []
+            if self.system_prompt is not None:
+                chat += [{"role": "system", "content": self.system_prompt}]
+
+            chat += [
+                {"role": "user", "content": context},
+            ]
+            # TODO: expose settings for chat formatting:
+            # - whether some "trigger" / start of assistant response might be placed in assistant's generation for it
+            # - if few-shot, should the fewshots be placed in separate convo turns? provided in user's single turn?...
+            context = self.tokenizer.apply_chat_template(
+                chat,
+                tokenize=False,
+                add_generation_prompt=True,
+            )
+            req.args = (context, continuation)
+            new_reqs.append(req)
+        return new_reqs
+    
     def _model_call(self, inps, attn_mask=None, labels=None):
         """
         :param inps: torch.Tensor
@@ -790,6 +830,12 @@ class HFLM(LM):
         return context_enc, continuation_enc
 
     def loglikelihood(self, requests: List[Instance]) -> List[Tuple[float, bool]]:
+        #SCP 2/19 from DF Branch
+        if self.use_chat_template:
+            print(f"First element before prompt formatting...\n{requests[0].args}")
+            requests = self.wrap_chat_template(requests)
+            print(f"First element after prompt formatting...\n{requests[0].args}")
+
         new_reqs = []
         for context, continuation in [req.args for req in requests]:
             if context == "":
@@ -807,6 +853,9 @@ class HFLM(LM):
 
     def loglikelihood_rolling(self, requests: List[Instance]) -> List[float]:
         loglikelihoods = []
+        
+        # SCP 2/19 from DF Branch
+        # TODO: add a warning that chat templates are ignored for ppl evals
 
         adaptive_batch_size = None
         if self.batch_size == "auto":
@@ -1063,6 +1112,12 @@ class HFLM(LM):
         return re_ord.get_original(res)
 
     def generate_until(self, requests: List[Instance]) -> List[str]:
+        # SCP 2/19 from DF Branch
+        if self.use_chat_template:
+            print(f"First element before prompt formatting...\n{requests[0].args}")
+            requests = self.wrap_chat_template(requests)
+            print(f"First element after prompt formatting...\n{requests[0].args}")
+
         res = []
 
         def _collate(x):

@@ -60,6 +60,11 @@ class VLLM(LM):
         gpu_memory_utilization: float = 0.9,
         device: str = "cuda",
         data_parallel_size: int = 1,
+        # 2/19 SCP like DF Branch
+        # Chat templating settings
+        use_chat_template: Optional[bool] = False,
+        # TODO: validate a template exists in tokenizer config, if this flag is true
+        system_prompt: Optional[str] = None,
     ):
         super().__init__()
 
@@ -118,6 +123,10 @@ class VLLM(LM):
 
         self._max_gen_toks = max_gen_toks
 
+        # SCP 2/19 like DF Branch
+        self.system_prompt = system_prompt
+        self.use_chat_template = use_chat_template
+
     @property
     def eot_token_id(self):
         # we use EOT because end of *text* is more accurate for what we're doing than end of *sentence*
@@ -162,6 +171,38 @@ class VLLM(LM):
 
         return encoding
 
+
+    # SCP: 2/19 like DF Branch
+    def wrap_chat_template(
+        self, requests: List[Instance], generate=False
+    ) -> List[Instance]:
+        """
+        Utility for adding chat templates via the apply_chat_template() method
+        """
+        # TODO: handle repeats > 1 case?
+        # TODO: raise an error if system prompt not compatible with template
+        new_reqs = []
+        for req in requests:
+            context, continuation = req.args[0].strip(), req.args[1]
+            chat = []
+            if self.system_prompt is not None:
+                chat += [{"role": "system", "content": self.system_prompt}]
+
+            chat += [
+                {"role": "user", "content": context},
+            ]
+            # TODO: expose settings for chat formatting:
+            # - whether some "trigger" / start of assistant response might be placed in assistant's generation for it
+            # - if few-shot, should the fewshots be placed in separate convo turns? provided in user's single turn?...
+            context = self.tokenizer.apply_chat_template(
+                chat,
+                tokenize=False,
+                add_generation_prompt=True,
+            )
+            req.args = (context, continuation)
+            new_reqs.append(req)
+        return new_reqs
+    
     def _model_generate(
         self,
         requests: List[List[int]] = None,
@@ -170,6 +211,13 @@ class VLLM(LM):
         stop: Optional[List[str]] = None,
         **kwargs,
     ):
+        #SCP 2/19 like DF Branch
+        if self.use_chat_template:
+            print(f"First element before prompt formatting...\n{requests[0].args}")
+            requests = self.wrap_chat_template(requests)
+            print(f"First element after prompt formatting...\n{requests[0].args}")
+
+
         if generate:
             kwargs = self.modify_gen_kwargs(kwargs)
             sampling_params = SamplingParams(max_tokens=max_tokens, stop=stop, **kwargs)
@@ -211,6 +259,12 @@ class VLLM(LM):
         return context_enc, continuation_enc
 
     def loglikelihood(self, requests: List[Instance]) -> List[Tuple[float, bool]]:
+        #SCP 2/19 from DF Branch
+        if self.use_chat_template:
+            print(f"First element before prompt formatting...\n{requests[0].args}")
+            requests = self.wrap_chat_template(requests)
+            print(f"First element after prompt formatting...\n{requests[0].args}")
+
         new_reqs = []
         for context, continuation in [req.args for req in requests]:
             if context == "":
@@ -228,6 +282,9 @@ class VLLM(LM):
 
     def loglikelihood_rolling(self, requests: List[Instance]) -> List[float]:
         loglikelihoods = []
+   
+        # SCP 2/19 from DF Branch
+        # TODO: add a warning that chat templates are ignored for ppl evals
 
         for (string,) in tqdm([req.args for req in requests]):
             rolling_token_windows = list(
@@ -256,6 +313,13 @@ class VLLM(LM):
         return loglikelihoods
 
     def generate_until(self, requests: List[Instance]) -> List[str]:
+
+        # SCP 2/19 from DF Branch
+        if self.use_chat_template:
+            print(f"First element before prompt formatting...\n{requests[0].args}")
+            requests = self.wrap_chat_template(requests)
+            print(f"First element after prompt formatting...\n{requests[0].args}")
+            
         res = []
 
         # batch tokenize contexts
