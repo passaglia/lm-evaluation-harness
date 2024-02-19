@@ -177,8 +177,8 @@ def parse_eval_args() -> argparse.Namespace:
     parser.add_argument(
         "--log_samples_filename",
         type=str,
-        default=None
-        help="Filename to save the log_samples output to."
+        default=None,
+        help="Filename to save the log_samples output to.",
     )
     parser.add_argument(
         "--seed",
